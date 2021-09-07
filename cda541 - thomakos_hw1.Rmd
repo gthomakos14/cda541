@@ -1,0 +1,17 @@
+---
+title: "Homework 1 - Glenn Thomakos"
+output:
+  html_notebook: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r}
+library(dplyr)
+df_cereal = read.csv('cereal.csv')
+```
+
+```{r}
+head(df_cereal)
+```
+
