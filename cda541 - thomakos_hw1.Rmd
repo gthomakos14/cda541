@@ -10,8 +10,49 @@ output:
 library(dplyr)
 df_cereal = read.csv('cereal.csv')
 ```
+TODO:
+Look for outliers
+Replace -1's
+Adjust for cups
+
+
 
 ```{r}
-head(df_cereal)
+summary(df_cereal)
 ```
 
+First, let's take a quick look at the summary of the cereal dataset. From here, we can have a general idea of what each column represents and whether or not there are any outliers. 
+
+Taking a quick scan of the column titles we can see that some of them will be unhelpful for the goal of identifying a nutrition rating. These unhelpful columns are mfr, type, shelf, and weight.
+
+```{r}
+useless_columns = c('mfr','type','shelf','weight')
+df_cereal = select(df_cereal, -one_of(useless_columns))
+```
+
+From this summary we can also see that one of the columns is "cups" which represents the serving size according to the discussion post on Kaggle for the dataset, found here: https://www.kaggle.com/crawford/80-cereals/discussion/88097. This must be accounted for since people who eat cereal don't measure 0.67 cups of cereal to put in their bowl, they just fill the bowl up. So we change the units for each entry from calories or grams of protein to calories per cup or grams of protein per cup. With this, we also drop the cups column since it's now accounted for in all of the other columns.
+
+```{r}
+df_temp = df_cereal[,c('calories','protein','fat','sodium','fiber','carbo','sugars','potass','vitamins')]/df_cereal$cups
+df_cereal = cbind(df_cereal[,c('name','rating')],df_temp)
+```
+
+Looking back at summary we can also find in the minimums for a few columns the value -1 which is quite odd given you can't have -1g of sugar. A look again at the Kaggle discussion board says that this was simply data not collected. Since this is only 3 cereals I have no problem just eliminating these cereals from the data.
+
+```{r}
+missing_value_cereals = c('Quaker Oatmeal','Almond Delight','Cream of Wheat (Quick)')
+df_cereal = filter(df_cereal, !(df_cereal$name %in% missing_value_cereals))
+```
+
+Now, we can take a look at tables like this that show some egregious outliers. There are some others but this table (along with potass) showed the largest number of outliers. 
+
+```{r}
+arrange(df_cereal,desc(fiber))
+```
+
+Given the sparse amount, the outliers will also be removed and finally we will have our final data frame for subsequent analysis. 
+
+```{r}
+outliers = c('100% Bran', 'All-Bran with Extra Fiber','All-Bran','Grape-Nuts','Great Grains Pecan')
+df_cereal = filter(df_cereal,!(df_cereal$name %in% outliers))
+```
