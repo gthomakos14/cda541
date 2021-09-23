@@ -7,17 +7,9 @@ output:
 ---
 
 ```{r}
+# install.packages('dplyr')
 library(dplyr)
 df_cereal = read.csv('cereal.csv')
-```
-TODO:
-Look for outliers
-Replace -1's
-Adjust for cups
-
-
-
-```{r}
 summary(df_cereal)
 ```
 
@@ -56,3 +48,26 @@ Given the sparse amount, the outliers will also be removed and finally we will h
 outliers = c('100% Bran', 'All-Bran with Extra Fiber','All-Bran','Grape-Nuts','Great Grains Pecan')
 df_cereal = filter(df_cereal,!(df_cereal$name %in% outliers))
 ```
+
+TODO:
+Group together the "good" variables like protein and potassium, then group the "bad" ones as well.
+
+```{r}
+set.seed(12)
+linear_model = lm(rating~calories+protein+fat+sodium+fiber+carbo+sugars+potass+vitamins, data=df_cereal)
+print(summary(linear_model))
+```
+Here we have the coefficients for each variable that remains as well as some other relevant statistics about the model and we can use this summary to answer question 2.
+
+a: Which predictors appear to have a significant relationship to the response?
+We can see that protein, sodium, fiber, and vitamins are the ones with the lowest p-values and are the most significant variables for predicting the health rating while calories is abysmal and offers very little to the model.
+
+b: What does the coefficient variable for "sugar" suggest?
+The coefficient suggests that for each unit of sugar in a particular cereal, the model predicts a health rating that is 0.809582 lower than the intercept. For example, if a new cereal was introduced that was literally just 10 units of sugar, the health rating would be about 37.4 (which puts it pretty close to Raisin Bran's 37.8).
+
+```{r}
+lm_interactions = lm(rating~calories:sugars+protein+fat+sodium+fiber+sugars+vitamins,data=df_cereal)
+summary(lm_interactions)
+```
+c: Use the * and : symbols to fit models with interactions. Are there any interactions that are significant?
+There are. Calories make for a good companion for other features in a "calories per x" scenario which makes sense from a nutritional common sense standpoint. The above is a model that fits the more significant features as well as calories per sugar. Similar models can be made that also feature p-values very near 0 by replacing calories per sugar with calories per sodium and calories per fat.
