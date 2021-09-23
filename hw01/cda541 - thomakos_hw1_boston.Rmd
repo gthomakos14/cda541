@@ -1,0 +1,110 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(MASS)
+library(corrplot)
+library(dplyr)
+```
+
+```{r}
+# I like my naming conventions, so I'm just changing the name of the dataset to avoid
+# making excessive amounts of typos when I make this notebook.
+df_boston = Boston
+corrplot(cor(df_boston), type='upper', diag=FALSE)
+```
+
+3a: Make pairwise scatterplots of the predictors, and describe your findings.
+There's 14 columns here which means there's quite a few plots that we'd have to sift through to if we looked at all the unique combinations so first off we're going to look at the correlation matrix for the Boston dataset. This, of course, comes after looking at the documentation found at: https://www.rdocumentation.org/packages/MASS/versions/7.3-54/topics/Boston 
+since I found several of the columns to be outright indecipherable without its help.
+
+# *** As an aside, I found that when plotting for the columns dist and dis (I had forgotten which one was actually in the data so I tried both), that they both yield results but they're of a different shape even though dist actually isn't in the dataset. Can you please comment on why this is? ***
+
+```{r}
+plot(df_boston$indus, df_boston$nox,
+     main='Graph 1: Non-retail Business Acres vs Nitrogen Oxides Concentration',
+     xlab='Proportion of non-retail business acres per town',
+     ylab='Nitrogen oxides concentration (parts per million)')
+
+plot(df_boston$crim, df_boston$dis, 
+     main='Graph 2: Crime vs Dist to Employment Centers', 
+     xlab='Crime Rate per Capita by Town',
+     ylab='Distance to Employment Centers')
+
+plot(df_boston$rm, df_boston$black,
+     main='Graph 3: Avg # of Rooms per Dwelling vs Proportion of Black Pop',
+     xlab='Avg num of rooms per dwelling',
+     ylab='Proportion of black population')
+```
+Above are three graphs which represent three stages of correlation: 
+Graph 1 is one that represents a significant linear correlation (the concentration around x=18 is a bit strange and that would normally warrant further investigation but that's outside the scope of the question). It plots represents a correlation between non-retail business acres and nitrogen oxides emissions which does seem rational from a common sense perspective where factories=emissions but it also begs some other questions about the dataset itself such as, how much of this non-retail business is blue collar or white collar? Plus, I'm not particularly familiar with emissions standards but are nitrogen oxides especially common greenhouse gasses? Why this one in particular in the dataset? These are both questions worth tugging on.
+
+Graph 2 demonstrates a relationship that is not linear but logarithmic. If we were to take a look deeper into the relationship between crime and distance to employment centers and we were insistent on using linear models, then some alteration of the domain would be necessary to create a more linear pattern. It also becomes necessary to ask the question of what exactly these five employment centers are, but again, this is outside the scope of this assigment.
+
+Graph 3 was chosen because it shows a minimal linear correlation at all. Yes, the correlation matrix says that columns paired against chas shows very uncorrelated data, chas is a categorical variable so it's really no surprise that correlation wasn't found there. However, this particular plot suggests that if looking for average number of rooms in a town, using the proportion of black populace as a feature wouldn't be particularly helpful.
+
+```{r}
+plot(df_boston$crim, df_boston$rad,
+     main='Crime Rate vs Index of Distance to Highways',
+     xlab='Crime Rate',
+     ylab='Index of Distance to Highways')
+
+plot(df_boston$crim, df_boston$medv,
+     main='Crime Rate vs Median Value of Owner-Occupied Homes',
+     xlab='Crime Rate',
+     ylab='Median Value of Owner-Occupied Homes')
+```
+The above demonstrates two of rad and medv are examples of fairly standard plots (all 13 were checked) when keeping crime rate on the x-axis: it develops a logarithmic relationship with several of the other features in the dataset. While there wasn't a particularly linear relationship with anything, the economic principle of diminishing return took effect and made it clear that economic and sociological factors do have an effect on crime rate. 
+
+The second plot also demonstrates an interesting aspect of the data which some unsubstantiated googling says that was actually caused by censorship from the Census Service. While not directly related to the crime relationship, it should always be considered at times when medv is used as a feature or a plot. However, the correlation can still be seen.
+
+```{r}
+summary(df_boston)
+boxplot(df_boston$black)
+```
+
+3c: Do any of the suburbs of Boston appear to have particularly high crime rates? Tax rates? Pupil-teacher ratios? Comment on the range of each predictor.
+
+Before we get into this, I should mention that at some points I am using boxplot() to get a look at the distribution of the particular feature in order to judge what would be an outlier and what would be just another example of diminishing return.
+
+Crime rate (crim): At this point in this write-up, it should be well documented that crime rate reaches some serious extremes. 89 is quite the high crime rate but so is 0.006. Each of these is quite the extreme and further research would need to be done but since the names of each of the suburbs is unavailable from the dataset then that research is, again, outside the scope of this assignment.
+
+% of land zoned for lots above 25k ft (zn): It makes a lot of sense that this would be another example of diminishing return. As the distance from the center of the city increases, more space becomes available for purchase and larger lots become the norm.
+
+Proportion of non-retail business acres per town (indus): Unremarkable. This seems fairly normally distributed.
+
+Charles River dummy variable (chas): This is a categorical variable, the range won't do too much for us.
+
+Nitrogen oxides concentration (nox): Again, a fairly normally distributed range albeit more lower-bound skewed than indus. All the same, nothing seems to be egregiously out there.
+
+Average number of rooms per dwelling (rm): This is where standard knowledge comes into play. A minimum of 3.5 rooms isn't particularly low and I certainly wouldn't place an upper bound on the number of rooms in my home. Plus, it's fairly normally distributed so nothing seems particularly interesting here.
+
+Proportion of owner-occupied units built prior to 1940 (age): It should be mentioned that (again, unsubstantiated) googling says that this dataset is from 1970 so the 1940 cutoff isn't exactly what it once was. However, this particular feature points to some very old and very new neighborhoods. A range of [2.9, 100] is quite the range for something of this nature.
+
+Weighted mean of distances to five Boston employment centers (dis): Again, an unremarkable example of diminishing return. If anything, this is a comment on the density of distinct suburbs within a certain distance of the employment centers of Boston.
+
+Index of accessibility to radial highways (rad): The sheer amount of 24's in here is just absurd. The word "index" in here is something more needs to be known about. This is where more research is required again.
+
+Full value property tax rate per $10,000: (tax): Judging from the summary, this one looks a bit exponential. Which I find surprising given the large amount of logarithmic (diminishing return) features here. Then again, I'm not fully positive what a "full value property tax rate" is.
+
+Pupil-teacher ratio by town (ptratio): These are normally pretty solid but there's a couple that are quite below the 1st quartile with 12.6 pupils per teacher, but I have to say I envy the days of a maximum of 22 pupils per teacher.
+
+(1000(bk-0.63)^2) where bk is the proportion of African-americans by town (black): African americans are HIGHLY concentrated into a particular section of Boston in 1970. The bizarre formula used to calculate this is could be a cause as well but this is quite the boxplot. Enough to the point where I'm adding it to the initial call above this text block as an interesting case.
+
+Lower status of the population (lstat): Even after furthergoogling of this, the definition is a little bit problematic from modern standards and I'd hesitate to use this as a feature for anything. Nevertheless, the box plot is skewed towards the lower-bound.
+
+Median value of owner-occupied homes in $1000's (medv): I've commented already on the censorship that's in this dataset so that should eliminate the concentration of the exorbitantly expensive 50,000 dollar homes (by 1970 standards) but all the same we arrive again at the diminishing return where neighborhoods have increasingly less and less draw as they get wealthier. Again, logarithmic adjustment appears necessary.
+
+```{r}
+df_boston_7 = filter(df_boston,rm>7)
+df_boston_8 = filter(df_boston,rm>8)
+print(paste('7 rooms per dwelling: ',dim(df_boston_7)[1]))
+print(paste('8 rooms per dwelling: ',dim(df_boston_8)[1]))
+summary(df_boston_8)
+```
+3d:  In this data set, how many of the suburbs average more than seven rooms per dwelling?  More than eight rooms per dwelling?  Comment on the suburbs that average more than eight rooms per dwelling.
+
+Printed above is the number of suburbs (out of 506) suburbs with more than 7 rooms per dwelling as well as 8 rooms per dwelling as well as the summary of the 13 suburbs with more than 8 rooms per dwelling. With it comes the elimination of the highest of the high in crime rates, a much lower bordering of the Charles River, older owned properties, significantly lower lstat and a LARGE increase in medv particularly given the knowledge of the 50 ceiling within that feature. Outside of this, the other features offer largely just a contraction around the mean/median but this is likely to be expected with several features given the small amount of entries remaining (a little above 2%).
+
