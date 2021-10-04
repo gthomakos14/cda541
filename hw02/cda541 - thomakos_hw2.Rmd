@@ -9,11 +9,13 @@ this data in order to build a predictive model for nutritional rating.
 I'm loading in the pre-processed data from the previous homework assignment. The pre-processing that took place removed outliers, removed some useless columns (namely mfr, type, shelf, and weight), scaled the other columns to accomodate for serving size denoted in the cups column, and removed entries with missing values (in the original csv, indicated by a -1. The reason for total removal was due to the small quantity: there were only 3.)
 #############################################################################################
 
-```{r}
+```{r warning=FALSE}
 rm(list=ls())
 library(dplyr)
 library(leaps)
 library(class)
+library(ISLR)
+library(glmnet)
 ```
 
 a) Divide the data into test (20% of data) and training (80% of data).  Fit a linear 
@@ -76,26 +78,6 @@ plot(exh_summary$rss, xlab = "No. of variables", ylab = "RSS", type = "l")
 plot(exh_summary$adjr2, xlab = "No. of variables", ylab = "Adjusted Rsq", type = "l")
 ```
 
-```{r}
-train_err_store <- matrix(rep(NA, 9))
-test_err_store <- matrix(rep(NA, 9))
-y_true_train = df_train$rating
-y_true_test = df_test$rating
-for (i in 1:9){
-  # Using only exhaustive subset selection.
-    y_hat_train = predict(regit_exh, newdata = df_train, id = i)
-    y_hat_test = predict(regit_exh, newdata = df_test, id = i)
-    
-    train_err_store[i] = (1/length(y_true_train))*sum((y_true_train-y_hat_train)^2)
-    test_err_store[i] = (1/length(y_true_test))*sum((y_true_test-y_hat_test)^2)
-}
-
-print('Train Error at n variables:')
-train_err_store
-print('Test Error at n variables:')
-test_err_store
-```
-
 d) Draw some conclusions through comparisons between models (a-c). Reflect on 
 the comparative predictive accuracy, and model interpretation. Which model would 
 you say is the “best one” based on your results?  Why? 
@@ -107,6 +89,13 @@ From this, we can see the hierarchy of MSE's being "no selection is better than 
 #############################################################################################
 
 ```{r}
+predict.regsubsets = function(object, newdata, id, ...) {
+    form = as.formula(object$call[[2]])
+    mat = model.matrix(form, newdata)
+    coefi = coef(object, id = id)
+    mat[, names(coefi)] %*% coefi
+}
+
 df_test$exh_predict = predict(regit_exh, df_test, id=6)
 df_test$fwd_predict = predict(regit_fwd, df_test, id=6)
 df_test$no_select_predict = predict.lm(model_no_selection, df_test)
@@ -137,6 +126,8 @@ I'm looking mostly at the test error rate for these two models since that's norm
 # name to fit with other variables in the notebook.
 # Also changed it to data frame format instead of matrix format since I'm more
 # familiar with that one.
+load('zip_data/zip.test.RData')
+load('zip_data/zip.train.RData')
 zip_test = data.frame(zip.test)
 zip_train = data.frame(zip.train)
 
@@ -150,7 +141,7 @@ df_test$X1[df_test$X1 == 4] = 1
 df_test$X1[df_test$X1 == 7] = 0
 ```
 
-```{r}
+```{r warning=FALSE}
 # Some code repetition here and this would likely be better as a function for
 # aesthetic purposes but this works well and it'd be a VERY specialized function
 # so I'm just leaving it as is.
@@ -197,3 +188,131 @@ knn_error_rate = function(df_train, df_test){
 knn_error_rate(df_train, df_test)
 ```
 
+3) (10 points) In this exercise, we will predict the number of applications received 
+using the  other variables in the College data set in the ISLR package. 
+
+#############################################################################################
+First, some transformations need to be done on the dataset. Namely, we need to adjust the scale of some of these columns. Since it uses total number of students for columns like Apps or Accept, this is just an indicator of the size of the school when we could be doing acceptance rate, enrollment rate, etc and get a better picture of the school.
+#############################################################################################
+```{r}
+data(College)
+df_college = College
+# Cazenovia College has a graduation rate of 118%. We'll just assume that's a typo and bring that down to 100.
+df_college['Cazenovia College', 'Grad.Rate']=100
+# Rutgers at New Brunswick is also the school that got the largest number of applications by far, nearly double second 
+# place so that will simply be removed.
+df_college = filter(df_college, Apps<30000) %>%
+  mutate('Accept.Rate' = Accept/Apps,
+         'Enroll.Rate' = Enroll/Accept,
+         'F.Undergrad.Pct' = F.Undergrad/Enroll,
+         'P.Undergrad.Pct' = P.Undergrad/Enroll)
+```
+
+(a) Split the data set into a training set and a test set.  Fit a linear model using 
+least squares on the training set and report the test error obtained. 
+
+#############################################################################################
+As can be seen printed below, this is an egregiously high MSE. However, this is to be expected since there's quite a few insignificant variables around muddying up the model and leading to a large amount of overfitting.
+#############################################################################################
+```{r}
+set.seed(12)
+# In keeping with the train-test split ratio of above, the data is split 80:20.
+sample_size = floor(0.8*nrow(df_college))
+index = sample(seq_len(nrow(df_college)),size=sample_size)
+df_college_train = df_college[index,]
+df_college_test = df_college[-index,]
+```
+
+```{r}
+library(glmnet)
+# The linear model uses all variables the dataset comes with, simply meant to exaggerate the feature selection 
+# capabilities of the ridge regression and lasso techniques to follow immediately after.
+linear_college = lm(Grad.Rate~., data=df_college_train)
+df_college_test$Grad.Rate.Predicted = predict(linear_college, newdata = df_college_test)
+df_college_test = mutate(df_college_test,
+                         'Error'=Grad.Rate.Predicted-Grad.Rate,
+                         'Error_Squared'=Error*Error)
+print(paste('The test MSE with the OLS model is: ', mean(df_college_test$Error_Squared)))
+```
+
+(b) Fit a ridge regression model on the training set, with λ chosen by cross-
+validation. Report the test error obtained.
+
+#############################################################################################
+As we can see, there is a small improvement in the test error compared to the OLS model. Again, this could definitely be improved by the outright removal of some features but that is not the purpose of this write-up.
+#############################################################################################
+
+```{r}
+####### This is only here to refresh the datasets and allow me to use the same variable names ######
+set.seed(12)
+# In keeping with the train-test split ratio of above, the data is split 80:20.
+sample_size = floor(0.8*nrow(df_college))
+index = sample(seq_len(nrow(df_college)),size=sample_size)
+df_college_train = df_college[index,]
+df_college_test = df_college[-index,]
+```
+
+
+```{r}
+set.seed(12)
+x_train = data.matrix(select(df_college_train,-Grad.Rate))
+y_train = df_college_train$Grad.Rate
+x_test = data.matrix(select(df_college_test, -Grad.Rate))
+lambda_finder = cv.glmnet(x_train, y_train, alpha=0)
+best_lambda = lambda_finder$lambda.min
+
+ridge_model = glmnet(x_train, y_train, alpha=0, lambda=best_lambda)
+```
+
+```{r}
+df_college_test$Grad.Rate.Predicted = predict(ridge_model, s=best_lambda, newx=x_test)
+df_college_test = mutate(df_college_test,
+                         'Error'=Grad.Rate.Predicted-Grad.Rate,
+                         'Error_Squared'=Error*Error)
+print(paste('The test MSE with the ridge regression model is: ', mean(df_college_test$Error_Squared)))
+```
+(c) Fit a lasso model on the training set, with λ chosen by crossvalidation. 
+Report the test error obtained, along with the number of non-zero coefficient 
+estimates. 
+
+#############################################################################################
+This will be the same code as above, but just changing the alpha in the glmnet calls to 1.
+
+While the error rate isn't much improved compared to the OLS model, what we're mostly after is the feature selection. However, none of the variables went to zero but if we were to override the cross-validation and choose a lambda larger than what was algorithmically chosen then some of these would inevitably go to zero. Some are even quite close to it already. Interestingly, the new columns created that were adjusted to be a "rate of" column rather than just a raw number (e.g. acceptance rate instead of total students accepted) performed much better than their counterparts.
+#############################################################################################
+```{r}
+####### This is only here to refresh the datasets and allow me to use the same variable names ######
+set.seed(12)
+# In keeping with the train-test split ratio of above, the data is split 80:20.
+sample_size = floor(0.8*nrow(df_college))
+index = sample(seq_len(nrow(df_college)),size=sample_size)
+df_college_train = df_college[index,]
+df_college_test = df_college[-index,]
+```
+
+```{r}
+set.seed(12)
+x_train = data.matrix(select(df_college_train,-Grad.Rate))
+y_train = df_college_train$Grad.Rate
+x_test = data.matrix(select(df_college_test, -Grad.Rate))
+lambda_finder = cv.glmnet(x_train, y_train, alpha=1)
+best_lambda = lambda_finder$lambda.min
+
+lasso_model = glmnet(x_train, y_train, alpha=0, lambda=best_lambda)
+```
+
+```{r}
+df_college_test$Grad.Rate.Predicted = predict(lasso_model, s=best_lambda, newx=x_test)
+df_college_test = mutate(df_college_test,
+                         'Error'=Grad.Rate.Predicted-Grad.Rate,
+                         'Error_Squared'=Error*Error)
+print(paste('The test MSE with the lasso model is: ', mean(df_college_test$Error_Squared)))
+coef(lasso_model)
+```
+
+(d) Among those that are not predicted well, do you notice any common trend 
+shared between the colleges?  
+
+#############################################################################################
+The colleges tend to be low graduation rate colleges. They also tend to be skewed a bit more towards the smaller side but that's a bit less significant.
+#############################################################################################
