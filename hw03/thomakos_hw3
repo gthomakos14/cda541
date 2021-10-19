@@ -49,6 +49,17 @@ x_test = df_random[-index,]
 plot the training set MSE associated with the best model of each size. 
 
 ```{r}
+# Need to use this function as in previous assignments, so brought in here.
+predict.regsubsets = function(object, newdata, id){
+    form = as.formula(object$call[[2]])
+    mat = model.matrix(form, newdata)
+    coefi = coef(object,id=id)
+    xvars=names(coefi)
+    mat[,xvars]%*%coefi
+}
 
+regfit_exh = regsubsets(x_train[,'Y']~., data=x_train[,1:20], 
+                        nbest=1, nvmax=20, method='exhaustive')
+summary(regfit_exh)
 ```
 
