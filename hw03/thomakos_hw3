@@ -60,6 +60,16 @@ predict.regsubsets = function(object, newdata, id){
 
 regfit_exh = regsubsets(x_train[,'Y']~., data=x_train[,1:20], 
                         nbest=1, nvmax=20, method='exhaustive')
-summary(regfit_exh)
+err_store = matrix(rep(NA,20))
+for (i in 1:20){
+  y_hat_train = predict(regfit_exh, newdata=x_train, id=i)
+  err_store[i] = sum((df_random['Y'] - y_hat_train)^2)/1000
+}
+# sum((y_hat_train - df_random['Y'])^2)/1000
+plot(err_store)
 ```
 
+```{r}
+data.frame(matrix_random %*% matrix(beta))+noise
+df_random['Y']
+```
