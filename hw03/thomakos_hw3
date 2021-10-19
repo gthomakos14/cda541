@@ -1,0 +1,54 @@
+---
+title: "Glenn Thomakos - Homework 3"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+```{r include=FALSE}
+rm(list=ls())
+
+library(dplyr)
+library(leaps)
+library(ISLR)
+```
+
+1. We have seen that as the number of features used in a model increase, the 
+training error will necessarily decrease, but the test error may not. We will 
+now explore this in a simulated data set. 
+
+(a) Generate a data set with p = 20 features, n = 1,000 observations, and an 
+associated quantitative response vector generated according to the model: 
+Y = Xβ + ε, 
+where β has some elements that are exactly equal to zero.  (be sure to use 
+“set.seed”) Hint: you may use “rnorm”. 
+```{r}
+set.seed(12)
+
+matrix_random = matrix(rnorm(1000*20),1000,20)
+# The data frame is only added in here since I'm more comfortable working with 
+# data frames rather than matrices.
+df_random = data.frame(matrix_random)
+beta = runif(20)
+beta[c(3,12,15,17)] = 0
+noise = 0.001*rnorm(20)
+
+Y = (matrix_random%*%beta)+noise
+```
+
+(b) Split your data set into a training set containing 900 observations and a test 
+set containing 100 observations. 
+
+```{r}
+index = sample(seq_len(nrow(df_random)),size=900)
+x_train = df_random[index,]
+x_test = df_random[-index,]
+```
+
+(c) Perform subset selection (best, forward or backwards) on the training set, and 
+plot the training set MSE associated with the best model of each size. 
+
+```{r}
+
+```
+
