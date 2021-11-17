@@ -6,11 +6,16 @@ output:
 ---
 
 ```{r include=FALSE}
-rm(list=ls())
-
+set.seed(12)
 library(dplyr)
 library(leaps)
 library(ISLR)
+library(corrplot)
+library(caret)
+library(klaR)
+library(class)
+library(ggplot2)
+library(GGally)
 ```
 
 1. We have seen that as the number of features used in a model increase, the 
@@ -19,25 +24,25 @@ now explore this in a simulated data set.
 
 (a) Generate a data set with p = 20 features, n = 1,000 observations, and an 
 associated quantitative response vector generated according to the model: 
-Y = Xβ + ε, 
-where β has some elements that are exactly equal to zero.  (be sure to use 
+Y = X*beta + err, 
+where beta has some elements that are exactly equal to zero.  (be sure to use 
 “set.seed”) Hint: you may use “rnorm”. 
-```{r}
-set.seed(12)
 
+```{r}
 matrix_random = matrix(rnorm(1000*20),1000,20)
-# The data frame is only added in here since I'm more comfortable working with 
+# The data frame is only added in here since I'm more comfortable working with
 # data frames rather than matrices.
 df_random = data.frame(matrix_random)
 beta = runif(20)
 beta[c(3,12,15,17)] = 0
 noise = 0.001*rnorm(20)
 
-Y = (matrix_random%*%beta)+noise
+Y = (matrix_random%*%matrix(beta))+noise
+df_random['Y'] = Y
 ```
 
-(b) Split your data set into a training set containing 900 observations and a test 
-set containing 100 observations. 
+(b) Split your data set into a training set containing 900 observations and a
+test set containing 100 observations. 
 
 ```{r}
 index = sample(seq_len(nrow(df_random)),size=900)
@@ -45,8 +50,8 @@ x_train = df_random[index,]
 x_test = df_random[-index,]
 ```
 
-(c) Perform subset selection (best, forward or backwards) on the training set, and 
-plot the training set MSE associated with the best model of each size. 
+(c) Perform subset selection (best, forward or backwards) on the training set, 
+and plot the training set MSE associated with the best model of each size. 
 
 ```{r}
 # Need to use this function as in previous assignments, so brought in here.
@@ -58,18 +63,279 @@ predict.regsubsets = function(object, newdata, id){
     mat[,xvars]%*%coefi
 }
 
-regfit_exh = regsubsets(x_train[,'Y']~., data=x_train[,1:20], 
+regfit_exh = regsubsets(Y~., data=x_train, 
                         nbest=1, nvmax=20, method='exhaustive')
-err_store = matrix(rep(NA,20))
+
+err_store_train = matrix(rep(NA,20))
 for (i in 1:20){
   y_hat_train = predict(regfit_exh, newdata=x_train, id=i)
-  err_store[i] = sum((df_random['Y'] - y_hat_train)^2)/1000
+  err_store_train[i] = sum((x_train['Y'] - y_hat_train)^2)/length(y_hat_train)
 }
-# sum((y_hat_train - df_random['Y'])^2)/1000
-plot(err_store)
+plot(err_store_train,
+     main='Train MSE',
+     xlab='Number of Features',
+     ylab='MSE')
 ```
 
+(d) Plot the test set MSE associated with the best model of each size. 
+
 ```{r}
-data.frame(matrix_random %*% matrix(beta))+noise
-df_random['Y']
+err_store_test = matrix(rep(NA,20))
+for (i in 1:20){
+  y_hat_test = predict(regfit_exh, newdata=x_test, id=i)
+  err_store_test[i] = sum((x_test['Y'] - y_hat_test)^2)/length(y_hat_test)
+}
+plot(err_store_test,
+     main='Test MSE',
+     xlab='Number of Features',
+     ylab='MSE')
 ```
+
+(e) For which model size does the test set MSE take on its minimum value? 
+Comment on your results. If it takes on its minimum value for a model containing only an intercept a model containing all the features, then play around with the way that you are generating the data in (a) until you come up with a scenario in which the test set MSE is minimized for an intermediate model size. 
+
+##############################################################################
+
+As expected with a response variable that only has a small amount of noise added to it, the test MSE gets outrageously small. The elbow comes at around 10 or 11 where adding more variables is really not that helpful. The only surprising thing is that my response variable was made using 4 zeroed out values in beta. I'd have expected the best test MSE to come at 16 variables rather than 17. However, the difference between the two is pretty much negligible. Still, I think the point still stands.
+
+##############################################################################
+
+```{r}
+paste('Minimum test MSE comes at: ',
+      which(err_store_test == min(err_store_test)))
+err_store_test
+```
+
+(f) How does the model at which the test set MSE is minimized compare to the 
+true model used to generate the data? Comment on the coefficient values. 
+
+##############################################################################
+
+As should be expected, these are all remarkably similar. The eliminated features of X3, X15, and X17 are ones that were zeroed out in the creation of beta. The most interesting one here is definitely X12 which was zeroed out in beta but it's absolutely tiny. It's almost on the order of 1,000 times smaller than the other coefficients so the model does have the right idea, but when you ask it to have 17 variables when only 16 are actually relevant, this is what you get.
+
+##############################################################################
+```{r}
+beta
+coef(regfit_exh,17)
+```
+
+(g) Create a plot displaying ##formula removed for pdf knitting purposes##  Comment on what you observe.  How do these result compare to part D. 
+
+##############################################################################
+
+It's a bit different than in part d. The hill in the beginning is the clear difference between the two but after about 5 features, they both have the same identical tail off.
+
+##############################################################################
+
+```{r}
+# Apologies for the copy and paste of the equation above. RStudio apparently
+# doesn't like what was posted in the assignment pdf
+beta_error_store = matrix(rep(NA,20))
+for(i in 1:20){
+  beta_error = sum((beta[summary(regfit_exh)$which[i,2:21]]-
+                      coef(regfit_exh,i)[-1])^2)
+  beta_error_store[i] = beta_error
+}
+plot(beta_error_store)
+```
+
+2)  This question uses the “Weekly” dataset in the ISLR package.  The data 
+contains information for weekly returns for 21 years, beginning in 1990 and 
+ending in 2010.   
+
+```{r}
+data(Weekly)
+df_weekly = Weekly
+df_weekly$Direction<-ifelse(df_weekly$Direction=='Up',1,0)
+```
+
+a)  Produce some numerical and graphical summaries of the “Weekly” data.  Do 
+there appear to be any patterns?
+
+##############################################################################
+
+Plot 1 is two overlayed density plots, filtered by the direction of the week. Evidently, volume doesn't have too large of an effect on whether or not the direction goes up or down.
+
+The printed statement simply states that there are 605 up weeks and 484 down weeks (that's 55.56% up weeks, 44.44% down weeks).
+
+The last plot is a correlation plot for the dataset and it's quite telling. The only remotely remotely correlated values are Year and Volume which isn't especially helpful since Year is in there for indexing purposes and really shouldn't be used as an actual feature.
+
+##############################################################################
+```{r}
+plot(density(filter(df_weekly,Direction==1)$Volume),
+     main='Volume for Up Weeks and Down Weeks')
+lines(density(filter(df_weekly,Direction==0)$Volume))
+
+num_up_weeks = sum(df_weekly$Direction)
+num_down_weeks = length(df_weekly$Direction)-sum(df_weekly$Direction)
+print(paste(num_up_weeks,' up weeks'))
+print(paste(num_down_weeks,' down weeks'))
+
+corrplot(cor(df_weekly))
+```
+
+b)  Use the full data to perform logistic regression with “Direction” as the response and  the  five  lag  variables,  plus  volume,  as  predictors. Use  the  summary function to print the results.  Do any of the predictors appear to be statistically significant?  Comment on these. 
+
+##############################################################################
+
+Lag2 is the closest thing to being significant but it's quite troublesome when the intercept is the most reliable predictor here. I suspect this is due to the off balance amount of Up and Down weeks for the stock market.
+
+##############################################################################
+```{r}
+logit = glm(Direction~Lag1+Lag2+Lag3+Lag4+Lag5+Volume, 
+            data=df_weekly,family='binomial')
+summary(logit)
+```
+
+c)  Compute  the  “confusion  matrix”  and  overall  fraction  of  correct  predictions. Explain  what  the  confusion  matrix  is  telling  you  about  the  types  of  mistakes made by logistic regression.  
+
+##############################################################################
+
+And here we are. The imbalance between up and down weeks means that the model will just predict an up week all the time, it's not actually learning anything.
+
+##############################################################################
+```{r}
+logit_predict = predict(logit, newdata=df_weekly, type='response')
+y_hat = round(logit_predict)
+conf_matrix = confusionMatrix(as.factor(y_hat),as.factor(df_weekly$Direction))
+conf_matrix$table
+```
+
+d)  Fit the logistic model using a training data period from 1990-2008, with “Lag2” as the only predictor.  Compute the confusion matrix, and the overall correct fraction  of  predictions  for  the  held  out  data  (that  is, the data  from  2009  and 2010).
+
+```{r}
+df_weekly_train = filter(df_weekly,Year<=2008)
+df_weekly_test = filter(df_weekly,Year>2008)
+
+logit = glm(Direction~Lag2, data=df_weekly_train, family='binomial')
+logit_predict = predict(logit, newdata=df_weekly_test, type='response')
+y_hat_test = round(logit_predict)
+
+conf_matrix_logit = confusionMatrix(as.factor(y_hat_test),
+                              as.factor(df_weekly_test$Direction))
+conf_matrix_logit$table
+error_rate_test = sum(abs(y_hat_test-df_weekly_test$Direction))/length(df_weekly_test$Direction)
+print(paste('Test error rate for logistic regression is: ',error_rate_test))
+```
+
+e)  Repeat (d) using LDA. 
+
+```{r}
+lda = lda(Direction~Lag2, data=df_weekly_train)
+lda_predict = predict(lda, newdata=df_weekly_test)
+
+conf_matrix_lda = confusionMatrix(as.factor(lda_predict$class),
+                              as.factor(df_weekly_test$Direction))
+conf_matrix_lda$table
+error_rate_test = sum(abs(as.numeric(lda_predict$class)-1-df_weekly_test$Direction))/length(df_weekly_test$Direction)
+print(paste('Test error rate for LDA is: ',error_rate_test))
+```
+
+f)  Repeat (d) using KNN with k=1. 
+
+```{r}
+knn = knn(train=data.frame(df_weekly_train$Lag2), 
+          test=data.frame(df_weekly_test$Lag2),
+          cl=df_weekly_train$Direction, 
+          k=1)
+conf_matrix_knn = confusionMatrix(as.factor(knn),
+                                  as.factor(df_weekly_test$Direction))
+conf_matrix_knn$table
+
+error_rate_test = sum(abs(as.numeric(knn)-1-df_weekly_test$Direction))/length(knn)
+print(paste('Test error rate for knn (k=1) is: ',error_rate_test))
+```
+g)  Which method appears to provide the best results? 
+
+##############################################################################
+
+Both logistic regression and LDA had the same predictions and the same error rate but they both ran into the same issue of predicting Up more frequently than is really necessary. KNN predicted a more even spread but the trouble is that if you just pick Up all the time then the error rate is 45% and the KNN error rate was 49%. A trivial response would have been better.
+
+##############################################################################
+
+h)  Experiment  with  different  combinations  of  predictors,  including  possible transformations  and  interactions,  for  each  method. Report  the  variables, method,  and  associated  confusion  matrix  that  appears  to  provide  the  best results on the held-out data.  Note that you should also experiment with values for K in the kNN classifier.  
+
+##############################################################################
+
+The first cell is looping over values of k, 3-9 just to see if a larger value would be more helpful, and k=9 is a bit better than the other values but it's still got a 45% misclassification rate and that's simply not going to cut it.
+
+##############################################################################
+
+```{r}
+# Using Lag2 as the only feature
+for(i in c(3,5,7,9)){
+  knn = knn(train=data.frame(df_weekly_train$Lag2), 
+            test=data.frame(df_weekly_test$Lag2),
+            cl=df_weekly_train$Direction, 
+            k=i)
+  conf_matrix_knn = confusionMatrix(as.factor(knn),
+                                    as.factor(df_weekly_test$Direction))
+  print(paste('k=',i))
+  print(conf_matrix_knn$table)
+  }
+```
+
+3)  Consider the Diabetes dataset (posted with assignment).  Assume the 
+population prior probabilities are estimated using the relative frequencies of the classes in the data. 
+
+```{r}
+load('/home/glenn/CDA 541/hw03/Diabetes.RData')
+df_diabetes = Diabetes
+```
+
+(a) Produce pairwise scatterplots for all five variables, with different symbols or colors representing the three different classes.  Do you see any evidence that the classes may have difference covariance matrices?  That they may not be multivariate normal?
+
+##############################################################################
+
+There's some evidence for the different covariance matrices particularly with the relwt variable. Glufast also gives evidence of having very similar covariance matrices with the other variables, none more obvious than glutest.
+
+It can also be seen along the main diagonal that just about all of the variables are multivariate normal at least within each group.
+
+##############################################################################
+```{r warning=FALSE}
+ggpairs(df_diabetes,mapping=aes(color=group))
+```
+
+(b) Apply linear discriminant analysis (LDA) and quadratic discriminant analysis (QDA). How does the performance of QDA compare to that of LDA in this case? 
+
+##############################################################################
+
+The confusion matrix for LDA and QDA indicate that LDA is only slightly better at predicting on the test set. It's quite close however and I wouldn't be surprised at all if a bigger test set or even a slightly different test set said that QDA was better.
+
+##############################################################################
+
+```{r}
+index = sample(seq_len(nrow(df_diabetes)),size=floor(0.75*nrow(df_diabetes)))
+df_diabetes_train = df_diabetes[index,]
+df_diabetes_test = df_diabetes[-index,]
+
+lda_diabetes = lda(group~.,data=df_diabetes_train)
+qda_diabetes = qda(group~.,data=df_diabetes_train)
+
+lda_predict = predict(lda_diabetes,newdata=df_diabetes_test)
+qda_predict = predict(qda_diabetes,newdata=df_diabetes_test)
+
+lda_conf_matrix = confusionMatrix(as.factor(lda_predict$class),
+                                  as.factor(df_diabetes_test$group))
+qda_conf_matrix = confusionMatrix(as.factor(qda_predict$class),
+                                  as.factor(df_diabetes_test$group))
+
+print('LDA Confusion Matrix')
+lda_conf_matrix$table
+print('QDA Confusion Matrix')
+qda_conf_matrix$table
+```
+
+(c) Suppose an individual has (glucose test/intolerence= 68, insulin test=122, SSPG = 544. Relative weight = 1.86, fasting plasma glucose = 184). To which 
+class does LDA assign this individual?  To which class does QDA?
+
+```{r}
+new_entry = data.frame('relwt'=1.86,
+                       'glufast'=184,
+                       'glutest'=68,
+                       'instest'=122,
+                       'sspg'=544)
+print(paste('LDA puts this in',predict(lda_diabetes,newdata=new_entry)$class))
+print(paste('QDA puts this in',predict(qda_diabetes,newdata=new_entry)$class))
+```
+
